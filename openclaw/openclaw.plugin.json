@@ -1,0 +1,44 @@
+{
+  "id": "pensieve-memory",
+  "name": "Pensieve Memory",
+  "description": "Hierarchical persistent memory powered by local SQLite + FTS5. Drop-in replacement for memory-core with conflict resolution and tiered recall.",
+  "activation": {
+    "onStartup": false
+  },
+  "kind": "memory",
+  "contracts": {
+    "tools": ["memory_search", "memory_get", "memory_store", "memory_forget"]
+  },
+  "uiHints": {
+    "dbPath": {
+      "label": "Database Path",
+      "placeholder": "~/.pensieve/openclaw.db",
+      "help": "Path to the SQLite database file. Supports ~ expansion.",
+      "advanced": true
+    },
+    "autoResolveConflicts": {
+      "label": "Auto-Resolve Conflicts",
+      "help": "Automatically archive stale memories when a new fact with the same topic is stored."
+    },
+    "defaultTier": {
+      "label": "Default Memory Tier",
+      "help": "Default tier for new memories: episodic (raw), semantic (facts), or core (identity)."
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dbPath": {
+        "type": "string"
+      },
+      "autoResolveConflicts": {
+        "type": "boolean"
+      },
+      "defaultTier": {
+        "type": "string",
+        "enum": ["episodic", "semantic", "core"]
+      }
+    }
+  }
+}

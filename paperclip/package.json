@@ -1,0 +1,22 @@
+{
+  "name": "@pensieve/paperclip",
+  "version": "0.1.0",
+  "description": "Pensieve memory plugin for Paperclip — gives every agent in your company persistent hierarchical memory.",
+  "type": "module",
+  "main": "dist/worker.js",
+  "files": ["dist"],
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["paperclip", "pensieve", "memory", "agent", "plugin"],
+  "license": "MIT",
+  "peerDependencies": {
+    "@paperclipai/plugin-sdk": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@paperclipai/plugin-sdk": "latest",
+    "typescript": "^5.0.0"
+  }
+}
