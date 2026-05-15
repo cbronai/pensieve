@@ -1,6 +1,13 @@
 packages:
-  - "core"
-  - "mcp"
-  - "vercel"
-  - "openclaw"
-  - "paperclip"
+  - core
+  - mcp
+  - vercel
+  - openclaw
+  - paperclip
+ignoredBuiltDependencies:
+  - '@google/genai'
+  - better-sqlite3
+  - koffi
+  - openclaw
+  - protobufjs
+  - tree-sitter-bash
