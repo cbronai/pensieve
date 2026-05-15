@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (e.g. 1.2.0) — without the v prefix'
-        required: true
-        type: string
 
 jobs:
   publish:
@@ -32,22 +26,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # ── Resolve version ────────────────────────────────────────────────────
+      # ── Resolve version from tag (v1.2.3 → 1.2.3) ─────────────────────────
       - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
         run: echo "PUBLISH_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
-      - name: Set version from input
-        if: github.event_name == 'workflow_dispatch'
-        run: echo "PUBLISH_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
 
       # ── Bump all package versions ──────────────────────────────────────────
       - name: Bump package versions
         run: |
           for pkg in core mcp vercel openclaw paperclip; do
             PKGJSON="${pkg}/package.json"
-            CURRENT=$(jq -r '.version' "$PKGJSON")
-            echo "Bumping $pkg: $CURRENT → $PUBLISH_VERSION"
+            echo "Bumping $pkg → $PUBLISH_VERSION"
             jq ".version = \"$PUBLISH_VERSION\"" "$PKGJSON" > tmp.$$.json && mv tmp.$$.json "$PKGJSON"
           done
 
@@ -84,10 +72,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # ── Summary ───────────────────────────────────────────────────────────
-      - name: Print published versions
+      - name: Summary
         run: |
-          echo "Published @cbronai/pensieve-* v$PUBLISH_VERSION to npm"
+          echo "Published @cbronai/pensieve-* v$PUBLISH_VERSION"
           echo "  @cbronai/pensieve-local"
           echo "  @cbronai/pensieve-mcp"
           echo "  @cbronai/pensieve-vercel"
