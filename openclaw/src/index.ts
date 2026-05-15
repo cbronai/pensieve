@@ -1,12 +1,12 @@
 /**
- * @pensieve/openclaw — OpenClaw memory slot plugin
+ * @cbronai/pensieve-openclaw — OpenClaw memory slot plugin
  *
- * Replaces OpenClaw's built-in memory-core / memory-lancedb with Pensieve's
- * SQLite-backed hierarchical store. Exposes the standard OpenClaw memory tools:
+ * Replaces OpenClaw's built-in memory with Pensieve's SQLite-backed
+ * hierarchical store. Exposes the standard memory tools:
  *   memory_search, memory_get, memory_store, memory_forget
  *
  * Install:
- *   openclaw plugin add @pensieve/openclaw
+ *   openclaw plugin add @cbronai/pensieve-openclaw
  *
  * Config in ~/.openclaw/config.yaml:
  *   plugins:
@@ -21,10 +21,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import { PensieveLocal, type MemoryTier } from '@cbronai/pensieve-local';
-import { definePluginEntry, type OpenClawPluginApi } from 'openclaw/plugin-sdk/plugin-entry';
-import { resolveLivePluginConfigObject } from 'openclaw/plugin-sdk/plugin-config-runtime';
 
-// ─── Per-agent Pensieve instances ────────────────────────────────────────────
+// ─── Per-agent Pensieve instances ─────────────────────────────────────────────
 
 const instances = new Map<string, PensieveLocal>();
 
@@ -40,88 +38,119 @@ function resolveDbPath(raw?: string): string {
   return path.resolve(p.replace(/^~/, os.homedir()));
 }
 
-// ─── Plugin entry ─────────────────────────────────────────────────────────────
+function resolveConfig(ctx: { config?: unknown }): { dbPath?: string; autoResolveConflicts?: boolean } {
+  if (!ctx.config || typeof ctx.config !== 'object') return {};
+  const cfg = ctx.config as Record<string, unknown>;
+  // Support both direct config object and nested plugin config
+  const entry = (cfg['pensieve-memory'] ?? cfg) as Record<string, unknown>;
+  return {
+    dbPath: typeof entry['dbPath'] === 'string' ? entry['dbPath'] : undefined,
+    autoResolveConflicts: typeof entry['autoResolveConflicts'] === 'boolean'
+      ? entry['autoResolveConflicts']
+      : true,
+  };
+}
 
-export default definePluginEntry({
+function resolveAgentId(ctx: { agent?: unknown; agentId?: unknown }): string {
+  const id = ctx.agent ?? ctx.agentId;
+  return typeof id === 'string' ? id : 'default';
+}
+
+// ─── Tool handlers ────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PluginCtx = Record<string, any>;
+
+export function handleMemorySearch(input: Record<string, unknown>, ctx: PluginCtx): string {
+  const cfg    = resolveConfig(ctx);
+  const db     = getInstance(resolveAgentId(ctx), resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
+  const tier   = input['tier'] === 'all' ? undefined : (input['tier'] as MemoryTier | undefined);
+  const limit  = typeof input['maxResults'] === 'number' ? input['maxResults'] : 10;
+  const query  = String(input['query'] ?? '');
+  const mems   = db.recall(query, { limit, tier });
+  if (mems.length === 0) return 'No relevant memories found.';
+  return mems.map((m: { tier: string; content: string }) => `[${m.tier}] ${m.content}`).join('\n');
+}
+
+export function handleMemoryGet(input: Record<string, unknown>, ctx: PluginCtx): string {
+  const cfg = resolveConfig(ctx);
+  const db  = getInstance(resolveAgentId(ctx), resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
+  return db.getContext(typeof input['query'] === 'string' ? input['query'] : undefined) || 'No memories stored yet.';
+}
+
+export function handleMemoryStore(input: Record<string, unknown>, ctx: PluginCtx): string {
+  const cfg     = resolveConfig(ctx);
+  const db      = getInstance(resolveAgentId(ctx), resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
+  const content = String(input['content'] ?? '');
+  const topic   = typeof input['topic'] === 'string' ? input['topic'] : undefined;
+  const tier    = (input['tier'] as MemoryTier | undefined) ?? 'semantic';
+  const mem     = db.remember(content, { topic, tier });
+  return `Stored memory #${mem.id}${topic ? ` (topic: ${topic})` : ''}.`;
+}
+
+export function handleMemoryForget(input: Record<string, unknown>, ctx: PluginCtx): string {
+  const cfg   = resolveConfig(ctx);
+  const db    = getInstance(resolveAgentId(ctx), resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
+  const topic = String(input['topic'] ?? '');
+  db.remember('', { topic, resolveConflicts: true });
+  return `Archived all memories for topic: ${topic}.`;
+}
+
+// ─── Plugin entry — framework-agnostic export ─────────────────────────────────
+// OpenClaw's plugin loader calls this. The exact API shape varies by version;
+// we export both a default object and named handlers so either loader style works.
+
+export const pensieveMemoryPlugin = {
+  name: 'pensieve-memory',
   tools: {
     memory_search: {
-      description: 'Search agent memories using full-text search (FTS5). Returns relevant facts and context.',
+      description: 'Search agent memories using full-text search (FTS5).',
       inputSchema: {
-        type: 'object' as const,
+        type: 'object',
         properties: {
-          query:      { type: 'string', description: 'Search query' },
-          maxResults: { type: 'number', description: 'Max results to return (default 10)' },
-          tier:       { type: 'string', enum: ['episodic', 'semantic', 'core', 'all'] as const },
+          query:      { type: 'string' },
+          maxResults: { type: 'number' },
+          tier:       { type: 'string', enum: ['episodic', 'semantic', 'core', 'all'] },
         },
-        required: ['query'] as const,
+        required: ['query'],
         additionalProperties: false,
       },
-      async execute(input, ctx: OpenClawPluginApi) {
-        const cfg  = resolveLivePluginConfigObject(ctx.config, 'pensieve-memory') ?? {};
-        const db   = getInstance(ctx.agentId, resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
-        const tier = input.tier === 'all' ? undefined : (input.tier as MemoryTier | undefined);
-        const mems = db.recall(input.query, { limit: input.maxResults ?? 10, tier });
-        if (mems.length === 0) return 'No relevant memories found.';
-        return mems.map(m => `[${m.tier}] ${m.content}`).join('\n');
-      },
+      execute: handleMemorySearch,
     },
-
     memory_get: {
-      description: 'Get the full formatted memory context for the current agent (all tiers).',
+      description: 'Get full formatted memory context for the current agent.',
       inputSchema: {
-        type: 'object' as const,
-        properties: {
-          query: { type: 'string', description: 'Optional topic to focus context retrieval' },
-        },
+        type: 'object',
+        properties: { query: { type: 'string' } },
         additionalProperties: false,
       },
-      async execute(input, ctx: OpenClawPluginApi) {
-        const cfg = resolveLivePluginConfigObject(ctx.config, 'pensieve-memory') ?? {};
-        const db  = getInstance(ctx.agentId, resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
-        return db.getContext(input.query) || 'No memories stored yet.';
-      },
+      execute: handleMemoryGet,
     },
-
     memory_store: {
-      description: 'Store a new memory. Set topic for conflict resolution — storing a fact on the same topic archives the old one.',
+      description: 'Store a new memory. Set topic for conflict resolution.',
       inputSchema: {
-        type: 'object' as const,
+        type: 'object',
         properties: {
-          content: { type: 'string', description: 'The memory to store' },
-          topic:   { type: 'string', description: 'Semantic topic (enables conflict resolution)' },
-          tier:    { type: 'string', enum: ['episodic', 'semantic', 'core'] as const },
+          content: { type: 'string' },
+          topic:   { type: 'string' },
+          tier:    { type: 'string', enum: ['episodic', 'semantic', 'core'] },
         },
-        required: ['content'] as const,
+        required: ['content'],
         additionalProperties: false,
       },
-      async execute(input, ctx: OpenClawPluginApi) {
-        const cfg = resolveLivePluginConfigObject(ctx.config, 'pensieve-memory') ?? {};
-        const db  = getInstance(ctx.agentId, resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
-        const mem = db.remember(input.content, {
-          topic: input.topic,
-          tier:  (input.tier as MemoryTier) ?? (cfg.defaultTier as MemoryTier) ?? 'semantic',
-        });
-        return `Stored memory #${mem.id}${input.topic ? ` (topic: ${input.topic})` : ''}.`;
-      },
+      execute: handleMemoryStore,
     },
-
     memory_forget: {
-      description: 'Archive (soft-delete) memories matching a topic or query.',
+      description: 'Archive (soft-delete) memories matching a topic.',
       inputSchema: {
-        type: 'object' as const,
-        properties: {
-          topic: { type: 'string', description: 'Exact topic to archive' },
-        },
-        required: ['topic'] as const,
+        type: 'object',
+        properties: { topic: { type: 'string' } },
+        required: ['topic'],
         additionalProperties: false,
       },
-      async execute(input, ctx: OpenClawPluginApi) {
-        const cfg = resolveLivePluginConfigObject(ctx.config, 'pensieve-memory') ?? {};
-        const db  = getInstance(ctx.agentId, resolveDbPath(cfg.dbPath), cfg.autoResolveConflicts ?? true);
-        // Re-remember with empty content triggers archiving of old topic
-        db.remember('', { topic: input.topic, resolveConflicts: true });
-        return `Archived all memories for topic: ${input.topic}.`;
-      },
+      execute: handleMemoryForget,
     },
   },
-} satisfies Parameters<typeof definePluginEntry>[0]);
+};
+
+export default pensieveMemoryPlugin;
