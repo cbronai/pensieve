@@ -20,7 +20,7 @@
 
 import os from 'node:os';
 import path from 'node:path';
-import { PensieveLocal, type MemoryTier } from '@pensieve/local';
+import { PensieveLocal, type MemoryTier } from '@cbronai/pensieve-local';
 import { definePluginEntry, type OpenClawPluginApi } from 'openclaw/plugin-sdk/plugin-entry';
 import { resolveLivePluginConfigObject } from 'openclaw/plugin-sdk/plugin-config-runtime';
 

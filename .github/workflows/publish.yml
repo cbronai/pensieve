@@ -1,0 +1,95 @@
+name: Publish SDK to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 1.2.0) — without the v prefix'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Resolve version ────────────────────────────────────────────────────
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "PUBLISH_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Set version from input
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "PUBLISH_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+
+      # ── Bump all package versions ──────────────────────────────────────────
+      - name: Bump package versions
+        run: |
+          for pkg in core mcp vercel openclaw paperclip; do
+            PKGJSON="${pkg}/package.json"
+            CURRENT=$(jq -r '.version' "$PKGJSON")
+            echo "Bumping $pkg: $CURRENT → $PUBLISH_VERSION"
+            jq ".version = \"$PUBLISH_VERSION\"" "$PKGJSON" > tmp.$$.json && mv tmp.$$.json "$PKGJSON"
+          done
+
+      # ── Build (core first, then dependents) ───────────────────────────────
+      - name: Build @cbronai/pensieve-local (core)
+        run: pnpm --filter @cbronai/pensieve-local build
+
+      - name: Build remaining packages
+        run: pnpm --filter '!@cbronai/pensieve-local' -r build
+
+      # ── Publish ───────────────────────────────────────────────────────────
+      - name: Publish @cbronai/pensieve-local
+        run: pnpm --filter @cbronai/pensieve-local publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @cbronai/pensieve-mcp
+        run: pnpm --filter @cbronai/pensieve-mcp publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @cbronai/pensieve-vercel
+        run: pnpm --filter @cbronai/pensieve-vercel publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @cbronai/pensieve-openclaw
+        run: pnpm --filter @cbronai/pensieve-openclaw publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @cbronai/pensieve-paperclip
+        run: pnpm --filter @cbronai/pensieve-paperclip publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Print published versions
+        run: |
+          echo "Published @cbronai/pensieve-* v$PUBLISH_VERSION to npm"
+          echo "  @cbronai/pensieve-local"
+          echo "  @cbronai/pensieve-mcp"
+          echo "  @cbronai/pensieve-vercel"
+          echo "  @cbronai/pensieve-openclaw"
+          echo "  @cbronai/pensieve-paperclip"

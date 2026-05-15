@@ -1,5 +1,5 @@
 {
-  "name": "@pensieve/paperclip",
+  "name": "@cbronai/pensieve-paperclip",
   "version": "0.1.0",
   "description": "Pensieve memory plugin for Paperclip — gives every agent in your company persistent hierarchical memory.",
   "type": "module",

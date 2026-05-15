@@ -1,0 +1,13 @@
+{
+  "name": "pensieve-sdk",
+  "private": true,
+  "description": "Pensieve SDK — monorepo root (not published)",
+  "scripts": {
+    "build": "pnpm -r --filter './core' build && pnpm -r --filter '!./core' build",
+    "build:core": "pnpm --filter @cbronai/pensieve-local build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

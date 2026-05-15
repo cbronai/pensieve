@@ -32,7 +32,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { PensieveLocal, type MemoryTier } from '@pensieve/local';
+import { PensieveLocal, type MemoryTier } from '@cbronai/pensieve-local';
 import os from 'node:os';
 import path from 'node:path';
 

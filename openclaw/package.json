@@ -1,5 +1,5 @@
 {
-  "name": "@pensieve/openclaw",
+  "name": "@cbronai/pensieve-openclaw",
   "version": "0.1.0",
   "description": "Pensieve memory slot plugin for OpenClaw — SQLite-backed hierarchical memory with conflict resolution.",
   "main": "dist/index.js",
@@ -15,11 +15,12 @@
     "openclaw": ">=1.0.0"
   },
   "dependencies": {
-    "@pensieve/local": "workspace:*",
+    "@cbronai/pensieve-local": "workspace:*",
     "better-sqlite3": "^9.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
     "openclaw": "latest",
     "typescript": "^5.0.0"
   }
