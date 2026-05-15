@@ -1,0 +1,26 @@
+{
+  "name": "@pensieve/vercel",
+  "version": "0.1.0",
+  "description": "Pensieve memory tools for the Vercel AI SDK (generateText, streamText, useChat)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["ai", "memory", "vercel", "nextjs", "pensieve", "sqlite"],
+  "license": "MIT",
+  "dependencies": {
+    "@pensieve/local": "workspace:*",
+    "ai": "^4.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "peerDependencies": {
+    "ai": ">=3.0.0"
+  }
+}
